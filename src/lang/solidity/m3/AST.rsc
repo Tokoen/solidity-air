@@ -13,36 +13,35 @@ data Declaration
     | \import(str path)
     | \contract(str name, list[Declaration] contractBody)
     | \variable(Type \type, str name)
-    | \function(str name, Declaration parameters, str visibility, str stateMutability, Declaration returnParameters, Statement functionBody)
+    | \function(str name, Declaration parameters, Declaration returnParameters, Statement functionBody)
     | \event(str name, Declaration eventParameter)
     | \constructor(Declaration parameters, Statement constructorBody)
     | \parameterList(list[Declaration])
+    | \struct(str name, list[Declaration] members)
     ;
 
 data Expression 
     = \binaryOperation(Expression left, str operator, Expression right)
+    | \unaryOperation(Expression expression, str operator)
     | \assignment(Expression lhs, str operator, Expression rhs)
+    | \indexAccess(Expression base, Expression index)
     | \memberAccess(Expression expression, str name)
     | \identifier(str name)
     | \functionCall(list[Expression] arguments)
     | \stringLiteral(str stringValue)
     | \numberLiteral(str numberValue)
-    | \booleanLiteral(bool boolValue)
-    | \type(Type \type)
-    | \postfix(Expression operand, str operator)
-    | \prefix(str operator, Expression operand)
+    | \booleanLiteral(str boolValue)
     | \new(Type \type)
     | \tuple(list[Expression] elements)
     ;
 
 data Statement 
     = \block(list[Statement] statements)
-    | \variableStatement(Declaration declaration, Expression expression)
+    | \variableStatement(list[Declaration] declaration, Expression expression)
     | \expressionStatement(Expression expression)
     | \if(Expression condition, Statement thenBranch)
     | \if(Expression condition, Statement thenBranch, Statement elseBranch)
-    | \for(list[Expression] initializers, list[Expression] updaters, Statement body)
-    | \for(list[Expression] initializers, Expression condition, list[Expression] updaters, Statement body)
+    | \for(Statement initializer, Expression condition, Statement loopExpression, Statement body)
     | \while(Expression condition, Statement body)
     | \doWhile(Statement do, Expression condition, Statement body)
     | \continue()
@@ -60,6 +59,9 @@ data Type
     | \bytes()
     | \boolean()
     | \address()
+    | \mapping(Type keyType, Type valueType)
+    | \identifierPath(str identifier)
+    | \array(Type \type)
     ;
 
 // Parse list of declarations
@@ -78,17 +80,20 @@ Declaration parseDeclaration(node declaration) {
             return \variable(parseType(declaration.typeName), declaration.name);
         case "FunctionDefinition": 
         {
-                if(declaration.kind == "constructor") {
+            switch(declaration.kind) {
+                case "function":
+                    return \function(declaration.name, parseDeclaration(declaration.parameters), parseDeclaration(declaration.returnParameters), parseStatement(declaration.body));
+                case "constructor":
                     return \constructor(parseDeclaration(declaration.parameters), parseStatement(declaration.body));
-                } else {
-                    return \function(declaration.name, parseDeclaration(declaration.parameters), declaration.visibility, 
-                    declaration.stateMutability, parseDeclaration(declaration.returnParameters), parseStatement(declaration.body));
-                }
+                default: throw "Unknown function declaration: <declaration.kind>";
+            }
         }
         case "EventDefinition":
             return \event(declaration.name, parseDeclaration(declaration.parameters));
         case "ParameterList":
             return \parameterList(parseNodes(declaration.parameters));
+        case "StructDefinition":
+            return \struct(declaration.name, parseNodes(declaration.members));
         default: throw "Unknown declaration type: <declaration.nodeType>";
     }
 }
@@ -102,6 +107,8 @@ Expression parseExpression(node expression){
     switch(expression.nodeType) {
         case "BinaryOperation":
             return \binaryOperation(parseExpression(expression.leftExpression), expression.operator, parseExpression(expression.rightExpression));
+        case "UnaryOperation":
+            return unaryOperation(parseExpression(expression.subExpression), expression.operator);
         case "Assignment":
             return \assignment(parseExpression(expression.leftHandSide), expression.operator, parseExpression(expression.rightHandSide));
         case "Identifier":
@@ -110,16 +117,20 @@ Expression parseExpression(node expression){
             return \functionCall(parseExpressions(expression.arguments));
         case "Literal": 
         {
-            if(expression.kind == "number") {
-                return \numberLiteral(expression.\value);
-            } else if (expression.kind == "boolean") {
-                return \booleanLiteral(expression.\value);
-            } else {
-                return \stringLiteral(expression.\value);
+            switch(expression.kind) {
+                case "string":
+                    return \stringLiteral(expression.\value);
+                case "number":
+                    return \numberLiteral(expression.\value);
+                case "bool":
+                    return \booleanLiteral(expression.\value);
+                default: throw "Unknown literal: <expression.kind>";
             }     
         }
         case "MemberAccess":
             return \memberAccess(parseExpression(expression.expression), expression.memberName);
+        case "IndexAccess":
+            return \indexAccess(parseExpression(expression.baseExpression), parseExpression(expression.indexExpression));
         default: throw "Unknown expression type: <expression.nodeType>";
     }
 }
@@ -136,6 +147,8 @@ Statement parseStatement(node statement){
             return \block(parseStatements(statement.statements));
         case "ExpressionStatement":
             return \expressionStatement(parseExpression(statement.expression));
+        case "VariableDeclarationStatement":
+            return \variableStatement(parseNodes(statement.declarations), parseExpression(statement.initialValue));
         case "IfStatement": 
         {   
             map[str,value] children = getKeywordParameters(statement);
@@ -145,6 +158,10 @@ Statement parseStatement(node statement){
                 return \if(parseExpression(statement.condition), parseStatement(statement.trueBody));
             }
         }
+        case "ForStatement":
+            return \for(parseStatement(statement.initializationExpression), parseExpression(statement.condition), parseStatement(statement.loopExpression), parseStatement(statement.body));
+        case "WhileStatement":
+            return \while(parseExpression(statement.condition), parseStatement(statement.body));
         case "Return":
             return \return(parseExpression(statement.expression));
         default: throw "Unknown statement type: <statement.nodeType>";
@@ -153,12 +170,30 @@ Statement parseStatement(node statement){
 
 // Parse type based on JSON ast node type.
 Type parseType(node \type){
-    switch(\type.name) {
-        case "uint256": 
-            return \uint();
-        case "address":
-            return \address();
-        default: throw "Unknown type: <\type.name>";
+    switch(\type.nodeType) {
+        case "ElementaryTypeName":
+        {
+            switch(\type.name) {
+                case "uint256": 
+                    return \uint();
+                case "address":
+                    return \address();
+                case "bool":
+                    return \boolean();
+                case "bytes32":
+                    return \bytes();
+                default: throw "Unknown ElementaryTypeName: <\type.name>";
+            }
+        }
+        case "Mapping":
+            return \mapping(parseType(\type.keyType), parseType(\type.valueType));
+        case "UserDefinedTypeName": 
+            return parseType(\type.pathNode);
+        case "IdentifierPath":
+            return \identifierPath(\type.name);
+        case "ArrayTypeName":
+            return \array(parseType(\type.baseType));
+        default: throw "Unknown type: <\type.nodeType>";
     }
 }
 
@@ -175,12 +210,14 @@ int calculateComplexity(list[Declaration] ast) {
 int visitStatements(Declaration declaration){
     int count=0;
     switch(declaration) {
-        case \function(_,_,_,_,_,Statement functionBody): 
+        case \function(_,_,_,Statement functionBody): 
             count += countDecisionPoints(functionBody);
         case \contract(_,list[Declaration] contractBody):
             for(Declaration declaration <- contractBody) {
                 count += visitStatements(declaration);
             }
+        case \constructor(_,Statement constructorBody):
+            count+= countDecisionPoints(constructorBody);
     }
     return count;
 }
@@ -197,6 +234,14 @@ int countDecisionPoints(Statement statement) {
             for(Statement statement <- statements) {
                 count += countDecisionPoints(statement);
             }
+        case \while(_,Statement body):{
+            count+=1;
+            count+=countDecisionPoints(body);
+        }
+        case \for(_,_,_,Statement body):{
+            count+=1;
+            count+=countDecisionPoints(body);
+        }
     }
     return count;
 }
@@ -204,7 +249,7 @@ int countDecisionPoints(Statement statement) {
 void main() {
 
     // Read the contents of the json AST
-    str jsonAST = readFile(|project://Solidity-air/programs/testAST.json|);
+    str jsonAST = readFile(|project://Solidity-air/programs/shared_wallet/SharedWalletAST.json|);
 
     // Parse json string
     map[str,value] parsedJsonAST = parseJSON(#map[str,value], jsonAST);
