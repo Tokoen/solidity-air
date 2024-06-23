@@ -8,7 +8,7 @@ import List;
 import Node;
 import String;
 
-loc baseLocation;
+loc sourceLocation;
 
 // Solidity grammar defined in rascal data structures
 data Declaration 
@@ -38,7 +38,8 @@ data Expression
     | \numberLiteral(str numberValue)
     | \booleanLiteral(str boolValue)
     | \new(Type \type)
-    | \tuple(list[Expression] elements)
+    | \tuple(list[Expression] components)
+    | \ElementaryTypeNameExpression(Type \type)
     ;
 
 data Statement 
@@ -73,12 +74,19 @@ data Type
     | \array(Type \type)
     ;
 
-// Parse location based on JSON AST source location
+// Parse location based on JSON AST src field
 loc parseLocation(str src){
+    // Replace JSON AST file location with Solidity file location
+    str astLocation = sourceLocation.path;
+    str solLocation = replaceAll(astLocation, "AST.json", ".sol");
+    loc codeLocation = |file:///| + solLocation;
+    
+    // Split up src field
     list[str] parts = split(":", src);
     int offset = toInt(parts[0]);
     int length = toInt(parts[1]);
-    return baseLocation(offset, length);
+
+    return codeLocation(offset, length);
 }
 
 // Parse list of declarations
@@ -159,6 +167,10 @@ Expression parseExpression(node expression){
             return \memberAccess(parseExpression(expression.expression), expression.memberName, src=parseLocation(expression.src));
         case "IndexAccess":
             return \indexAccess(parseExpression(expression.baseExpression), parseExpression(expression.indexExpression), src=parseLocation(expression.src));
+        case "TupleExpression":
+            return \tuple(parseExpressions(expression.components), src=parseLocation(expression.src));
+        case "ElementaryTypeNameExpression":
+            return \ElementaryTypeNameExpression(parseType(expression.typeName));
         default: throw "Unknown expression type: <expression.nodeType>";
     }
 }
@@ -215,7 +227,7 @@ Type parseType(node \type){
         case "ElementaryTypeName":
         {
             switch(\type.name) {
-                case "uint256": 
+                case /uint[0-9]*/:
                     return \uint();
                 case "address":
                     return \address();
@@ -225,8 +237,6 @@ Type parseType(node \type){
                     return \bytes();
                 case "string":
                     return \string();
-                case "uint8":
-                    return \uint();
                 default: throw "Unknown ElementaryTypeName: <\type.name>";
             }
         }
@@ -298,7 +308,7 @@ int countDecisionPoints(Statement statement) {
 list[Declaration] createAST(loc file) {
 
     // Set location of file
-    baseLocation = file;
+    sourceLocation = file;
 
     // Read the contents of the json AST
     str jsonAST = readFile(file);
@@ -311,13 +321,6 @@ list[Declaration] createAST(loc file) {
 
     // Make AST
     list[Declaration] ast = parseDeclarations(nodes);
-
-    // Print AST
-    iprintln(ast);
-
-    // Calculate complexity
-    int complexity = calculateComplexity(ast);
-    println("Cyclomatic complexity: <complexity>");
 
     return ast;
 }

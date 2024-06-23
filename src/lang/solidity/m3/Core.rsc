@@ -6,8 +6,10 @@ import lang::solidity::m3::AST;
 import util::FileSystem;
 import IO;
 import String;
+import Set;
 
-void createM3(loc directory) { // Insert path and change \ to / |file:///<path>|;
+void createM3(loc directory) { // Insert path and change backward slash \ to forward slash /: |file:///<path>|;
+
     // |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core|
 
     set[loc] jsonFiles = find(directory, "json");
@@ -19,5 +21,11 @@ void createM3(loc directory) { // Insert path and change \ to / |file:///<path>|
             jsonASTs += file;
         }
     }
-    iprintln(jsonASTs);
+    //iprintln(jsonASTs);
+
+    list[loc] ASTList = toList(jsonASTs);
+
+    list[Declaration] ast = createAST(ASTList[0]);
+
+    iprintln(ast);
 }
