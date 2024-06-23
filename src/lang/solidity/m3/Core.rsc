@@ -6,6 +6,7 @@ import lang::solidity::m3::AST;
 import util::FileSystem;
 import IO;
 import String;
+import List;
 
 void createM3(loc directory) { // Insert path and change backward slash \ to forward slash /: |file:///<path>|;
 
@@ -13,7 +14,7 @@ void createM3(loc directory) { // Insert path and change backward slash \ to for
 
     // Find all JSON files in directory
     set[loc] jsonFiles = find(directory, "json");
-    set[loc] jsonASTs = {};
+    list[loc] jsonASTs = [];
 
     // Find all ASTs
     for(loc file <- jsonFiles) {
@@ -22,7 +23,7 @@ void createM3(loc directory) { // Insert path and change backward slash \ to for
             jsonASTs += file;
         }
     }
-    
+
     /* Error: |std:///lang/json/IO.rsc|(2599,303,<49,0>,<52,144>): IO("NPE")
         at *** somewhere ***(|std:///lang/json/IO.rsc|(2599,303,<49,0>,<52,144>))
         at parseJSON(|std:///lang/json/IO.rsc|(2895,5,<52,137>,<52,142>)) */
@@ -37,9 +38,26 @@ void createM3(loc directory) { // Insert path and change backward slash \ to for
     jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/protocol/libraries/aave-upgradeability/BaseImmutableAdminUpgradeabilityProxyAST.json|;
 
     // Create list of rascal ASTs
-    list[value] rascalASTs = [];
+    list[list[Declaration]] rascalASTs = [];
+    int count = 0;
     for(jsonAST <- jsonASTs) {
         println("Currently parsing: <jsonAST>");
-        rascalASTs +=createAST(jsonAST);
+        rascalASTs += [createAST(jsonAST)];
+        count += 1;
     }
+    println("Amount of programs: <count>");
+
+    list[int] complexities=[0 | i <- [0..20]];
+    for(rascalAST <- rascalASTs){
+        int complexity = calculateComplexity(rascalAST);
+        complexities[complexity]+=1;
+    }
+    println(complexities);
 }
+
+/*TO DO: 
+- Global variable in AST?
+- Null error 
+- Complexity graph
+- M3 mapping
+*/ 
