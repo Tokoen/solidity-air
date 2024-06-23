@@ -90,8 +90,8 @@ contract MyERC20Token is ERC20 {
         if (
             _value > 0 &&
             __allowances[_from][msg.sender] > 0 &&
-            __allowances[_from][msg.sender] >= _value &&
-            !isContract(_to)
+            __allowances[_from][msg.sender] >= _value 
+            && !isContract(_to)
         ) {
             __balanceOf[_from] -= _value;
             __balanceOf[_to] += _value;

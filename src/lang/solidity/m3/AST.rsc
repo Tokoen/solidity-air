@@ -6,6 +6,9 @@ import lang::json::IO;
 import IO;
 import List;
 import Node;
+import String;
+
+loc baseLocation;
 
 // Solidity grammar defined in rascal data structures
 data Declaration 
@@ -14,10 +17,13 @@ data Declaration
     | \contract(str name, list[Declaration] contractBody)
     | \variable(Type \type, str name)
     | \function(str name, Declaration parameters, Declaration returnParameters, Statement functionBody)
+    | \function(str name, Declaration parameters, Declaration returnParameters)
     | \event(str name, Declaration eventParameter)
     | \constructor(Declaration parameters, Statement constructorBody)
     | \parameterList(list[Declaration])
     | \struct(str name, list[Declaration] members)
+    | \modifier(str name, Declaration parameter, Statement modifierBody)
+    | \receive(Statement receiveBody)
     ;
 
 data Expression 
@@ -38,6 +44,7 @@ data Expression
 data Statement 
     = \block(list[Statement] statements)
     | \variableStatement(list[Declaration] declaration, Expression expression)
+    | \variableStatement(list[Declaration] declaration) 
     | \expressionStatement(Expression expression)
     | \if(Expression condition, Statement thenBranch)
     | \if(Expression condition, Statement thenBranch, Statement elseBranch)
@@ -50,6 +57,8 @@ data Statement
     | \return(Expression expression)
     | \revert(Expression expression)
     | \emit(Expression expression)
+    | \placeholder()
+    | \assembly()
     ;
 
 data Type 
@@ -64,8 +73,16 @@ data Type
     | \array(Type \type)
     ;
 
+// Parse location based on JSON AST source location
+loc parseLocation(str src){
+    list[str] parts = split(":", src);
+    int offset = toInt(parts[0]);
+    int length = toInt(parts[1]);
+    return baseLocation(offset, length);
+}
+
 // Parse list of declarations
-list[Declaration] parseNodes(list[node] nodes){
+list[Declaration] parseDeclarations(list[node] nodes){
     return [parseDeclaration(declaration) | declaration <- nodes];
 }
 
@@ -73,27 +90,38 @@ list[Declaration] parseNodes(list[node] nodes){
 Declaration parseDeclaration(node declaration) { 
     switch(declaration.nodeType){
         case "PragmaDirective": 
-            return \pragma(declaration.literals);
+            return \pragma(declaration.literals, src=parseLocation(declaration.src));
         case "ContractDefinition": 
-            return \contract(declaration.name, parseNodes(declaration.nodes));
+            return \contract(declaration.name, parseDeclarations(declaration.nodes), src=parseLocation(declaration.src));
         case "VariableDeclaration":
-            return \variable(parseType(declaration.typeName), declaration.name);
+            return \variable(parseType(declaration.typeName), declaration.name, src=parseLocation(declaration.src));
         case "FunctionDefinition": 
         {
             switch(declaration.kind) {
                 case "function":
-                    return \function(declaration.name, parseDeclaration(declaration.parameters), parseDeclaration(declaration.returnParameters), parseStatement(declaration.body));
+                {
+                    map[str,value] children = getKeywordParameters(declaration);
+                    if("body" in children) {
+                        return \function(declaration.name, parseDeclaration(declaration.parameters), parseDeclaration(declaration.returnParameters), parseStatement(declaration.body), src=parseLocation(declaration.src));
+                    } else {
+                        return \function(declaration.name, parseDeclaration(declaration.parameters), parseDeclaration(declaration.returnParameters), src=parseLocation(declaration.src));
+                    }
+                }
                 case "constructor":
-                    return \constructor(parseDeclaration(declaration.parameters), parseStatement(declaration.body));
+                    return \constructor(parseDeclaration(declaration.parameters), parseStatement(declaration.body), src=parseLocation(declaration.src));
+                case "receive":
+                    return \receive(parseStatement(declaration.body), src=parseLocation(declaration.src));
                 default: throw "Unknown function declaration: <declaration.kind>";
             }
         }
         case "EventDefinition":
-            return \event(declaration.name, parseDeclaration(declaration.parameters));
+            return \event(declaration.name, parseDeclaration(declaration.parameters), src=parseLocation(declaration.src));
         case "ParameterList":
-            return \parameterList(parseNodes(declaration.parameters));
+            return \parameterList(parseDeclarations(declaration.parameters), src=parseLocation(declaration.src));
         case "StructDefinition":
-            return \struct(declaration.name, parseNodes(declaration.members));
+            return \struct(declaration.name, parseDeclarations(declaration.members), src=parseLocation(declaration.src));
+        case "ModifierDefinition":
+            return \modifier(declaration.name, parseDeclaration(declaration.parameters), parseStatement(declaration.body), src=parseLocation(declaration.src));
         default: throw "Unknown declaration type: <declaration.nodeType>";
     }
 }
@@ -106,31 +134,31 @@ list[Expression] parseExpressions(list[node] expressions){
 Expression parseExpression(node expression){
     switch(expression.nodeType) {
         case "BinaryOperation":
-            return \binaryOperation(parseExpression(expression.leftExpression), expression.operator, parseExpression(expression.rightExpression));
+            return \binaryOperation(parseExpression(expression.leftExpression), expression.operator, parseExpression(expression.rightExpression), src=parseLocation(expression.src));
         case "UnaryOperation":
-            return unaryOperation(parseExpression(expression.subExpression), expression.operator);
+            return unaryOperation(parseExpression(expression.subExpression), expression.operator, src=parseLocation(expression.src));
         case "Assignment":
-            return \assignment(parseExpression(expression.leftHandSide), expression.operator, parseExpression(expression.rightHandSide));
+            return \assignment(parseExpression(expression.leftHandSide), expression.operator, parseExpression(expression.rightHandSide), src=parseLocation(expression.src));
         case "Identifier":
-            return \identifier(expression.name);
+            return \identifier(expression.name, src=parseLocation(expression.src));
         case "FunctionCall":
-            return \functionCall(parseExpressions(expression.arguments));
+            return \functionCall(parseExpressions(expression.arguments), src=parseLocation(expression.src));
         case "Literal": 
         {
             switch(expression.kind) {
                 case "string":
-                    return \stringLiteral(expression.\value);
+                    return \stringLiteral(expression.\value, src=parseLocation(expression.src));
                 case "number":
-                    return \numberLiteral(expression.\value);
+                    return \numberLiteral(expression.\value, src=parseLocation(expression.src));
                 case "bool":
-                    return \booleanLiteral(expression.\value);
+                    return \booleanLiteral(expression.\value, src=parseLocation(expression.src));
                 default: throw "Unknown literal: <expression.kind>";
             }     
         }
         case "MemberAccess":
-            return \memberAccess(parseExpression(expression.expression), expression.memberName);
+            return \memberAccess(parseExpression(expression.expression), expression.memberName, src=parseLocation(expression.src));
         case "IndexAccess":
-            return \indexAccess(parseExpression(expression.baseExpression), parseExpression(expression.indexExpression));
+            return \indexAccess(parseExpression(expression.baseExpression), parseExpression(expression.indexExpression), src=parseLocation(expression.src));
         default: throw "Unknown expression type: <expression.nodeType>";
     }
 }
@@ -144,26 +172,39 @@ list[Statement] parseStatements(list[node] statements) {
 Statement parseStatement(node statement){
     switch(statement.nodeType) {
         case "Block":
-            return \block(parseStatements(statement.statements));
+            return \block(parseStatements(statement.statements), src=parseLocation(statement.src));
         case "ExpressionStatement":
-            return \expressionStatement(parseExpression(statement.expression));
-        case "VariableDeclarationStatement":
-            return \variableStatement(parseNodes(statement.declarations), parseExpression(statement.initialValue));
+            return \expressionStatement(parseExpression(statement.expression), src=parseLocation(statement.src));
+        case "VariableDeclarationStatement": 
+        {
+            map[str,value] children = getKeywordParameters(statement);
+            if("initialValue" in children) {
+                 return \variableStatement(parseDeclarations(statement.declarations), parseExpression(statement.initialValue), src=parseLocation(statement.src));
+            } else {
+                 return \variableStatement(parseDeclarations(statement.declarations), src=parseLocation(statement.src));
+            }
+        }
         case "IfStatement": 
         {   
             map[str,value] children = getKeywordParameters(statement);
             if("falseBody" in children) {
-                return \if(parseExpression(statement.condition), parseStatement(statement.trueBody), parseStatement(statement.falseBody));
+                return \if(parseExpression(statement.condition), parseStatement(statement.trueBody), parseStatement(statement.falseBody), src=parseLocation(statement.src));
             } else {
-                return \if(parseExpression(statement.condition), parseStatement(statement.trueBody));
+                return \if(parseExpression(statement.condition), parseStatement(statement.trueBody), src=parseLocation(statement.src));
             }
         }
         case "ForStatement":
-            return \for(parseStatement(statement.initializationExpression), parseExpression(statement.condition), parseStatement(statement.loopExpression), parseStatement(statement.body));
+            return \for(parseStatement(statement.initializationExpression), parseExpression(statement.condition), parseStatement(statement.loopExpression), parseStatement(statement.body), src=parseLocation(statement.src));
         case "WhileStatement":
-            return \while(parseExpression(statement.condition), parseStatement(statement.body));
+            return \while(parseExpression(statement.condition), parseStatement(statement.body), src=parseLocation(statement.src));
         case "Return":
-            return \return(parseExpression(statement.expression));
+            return \return(parseExpression(statement.expression), src=parseLocation(statement.src));
+        case "PlaceholderStatement":
+            return \return(src=parseLocation(statement.src));
+        case "EmitStatement":
+            return \emit(parseExpression(statement.eventCall), src=parseLocation(statement.src));
+        case "InlineAssembly":
+            return \assembly();
         default: throw "Unknown statement type: <statement.nodeType>";
     }
 }
@@ -182,6 +223,10 @@ Type parseType(node \type){
                     return \boolean();
                 case "bytes32":
                     return \bytes();
+                case "string":
+                    return \string();
+                case "uint8":
+                    return \uint();
                 default: throw "Unknown ElementaryTypeName: <\type.name>";
             }
         }
@@ -218,6 +263,10 @@ int visitStatements(Declaration declaration){
             }
         case \constructor(_,Statement constructorBody):
             count+= countDecisionPoints(constructorBody);
+        case \modifier(_,_,Statement modifierBody):
+            count += countDecisionPoints(modifierBody);
+        case \receive(Statement receiveBody):
+            count += countDecisionPoints(receiveBody);
     }
     return count;
 }
@@ -246,10 +295,13 @@ int countDecisionPoints(Statement statement) {
     return count;
 }
 
-void main() {
+list[Declaration] createAST(loc file) {
+
+    // Set location of file
+    baseLocation = file;
 
     // Read the contents of the json AST
-    str jsonAST = readFile(|project://Solidity-air/programs/shared_wallet/SharedWalletAST.json|);
+    str jsonAST = readFile(file);
 
     // Parse json string
     map[str,value] parsedJsonAST = parseJSON(#map[str,value], jsonAST);
@@ -258,7 +310,7 @@ void main() {
     value nodes = parsedJsonAST["nodes"];
 
     // Make AST
-    list[Declaration] ast = parseNodes(nodes);
+    list[Declaration] ast = parseDeclarations(nodes);
 
     // Print AST
     iprintln(ast);
@@ -267,9 +319,5 @@ void main() {
     int complexity = calculateComplexity(ast);
     println("Cyclomatic complexity: <complexity>");
 
+    return ast;
 }
-
-/* TO DO:
-- add sources
-- extend grammar, parser and complexity calculator
-*/
