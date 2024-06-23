@@ -8,6 +8,7 @@ import List;
 import Node;
 import String;
 
+// Location of JSON AST
 loc sourceLocation;
 
 // Solidity grammar defined in rascal data structures
@@ -15,15 +16,20 @@ data Declaration
     = \pragma(list[str] literals)
     | \import(str path)
     | \contract(str name, list[Declaration] contractBody)
+    | \interface(str name, list[Declaration] interfaceBody)
+    | \library(str name, list[Declaration] libraryBody)
     | \variable(Type \type, str name)
     | \function(str name, Declaration parameters, Declaration returnParameters, Statement functionBody)
     | \function(str name, Declaration parameters, Declaration returnParameters)
+    | \fallback(str name, Declaration parameters, Declaration returnParameters, Statement functionBody)
     | \event(str name, Declaration eventParameter)
     | \constructor(Declaration parameters, Statement constructorBody)
     | \parameterList(list[Declaration])
-    | \struct(str name, list[Declaration] members)
+    | \struct(str name, list[Declaration] structMembers)
     | \modifier(str name, Declaration parameter, Statement modifierBody)
     | \receive(Statement receiveBody)
+    | \using(Type library, Type \type)
+    | \enum(str name, list[Expression] enumMembers)
     ;
 
 data Expression 
@@ -40,10 +46,13 @@ data Expression
     | \new(Type \type)
     | \tuple(list[Expression] components)
     | \ElementaryTypeNameExpression(Type \type)
+    | \conditional(Expression trueExpression, Expression falseExpression)
+    | \enumValue(str name)
     ;
 
 data Statement 
     = \block(list[Statement] statements)
+    | \uncheckedBlock(list[Statement] statements)
     | \variableStatement(list[Declaration] declaration, Expression expression)
     | \variableStatement(list[Declaration] declaration) 
     | \expressionStatement(Expression expression)
@@ -80,7 +89,7 @@ loc parseLocation(str src){
     str astLocation = sourceLocation.path;
     str solLocation = replaceAll(astLocation, "AST.json", ".sol");
     loc codeLocation = |file:///| + solLocation;
-    
+
     // Split up src field
     list[str] parts = split(":", src);
     int offset = toInt(parts[0]);
@@ -99,8 +108,20 @@ Declaration parseDeclaration(node declaration) {
     switch(declaration.nodeType){
         case "PragmaDirective": 
             return \pragma(declaration.literals, src=parseLocation(declaration.src));
+        case "ImportDirective":
+            return \import(declaration.file, src=parseLocation(declaration.src));
         case "ContractDefinition": 
-            return \contract(declaration.name, parseDeclarations(declaration.nodes), src=parseLocation(declaration.src));
+        {
+            switch(declaration.contractKind) {
+                case "contract":
+                    return \contract(declaration.name, parseDeclarations(declaration.nodes), src=parseLocation(declaration.src));
+                case "interface":
+                    return \interface(declaration.name, parseDeclarations(declaration.nodes), src=parseLocation(declaration.src));
+                case "library":
+                    return \library(declaration.name, parseDeclarations(declaration.nodes), src=parseLocation(declaration.src));
+                default: throw "Unknown contract declaration: <declaration.contractKind>";
+            }
+        }
         case "VariableDeclaration":
             return \variable(parseType(declaration.typeName), declaration.name, src=parseLocation(declaration.src));
         case "FunctionDefinition": 
@@ -119,6 +140,8 @@ Declaration parseDeclaration(node declaration) {
                     return \constructor(parseDeclaration(declaration.parameters), parseStatement(declaration.body), src=parseLocation(declaration.src));
                 case "receive":
                     return \receive(parseStatement(declaration.body), src=parseLocation(declaration.src));
+                case "fallback":
+                    return \fallback(declaration.name, parseDeclaration(declaration.parameters), parseDeclaration(declaration.returnParameters), parseStatement(declaration.body), src=parseLocation(declaration.src));
                 default: throw "Unknown function declaration: <declaration.kind>";
             }
         }
@@ -130,6 +153,10 @@ Declaration parseDeclaration(node declaration) {
             return \struct(declaration.name, parseDeclarations(declaration.members), src=parseLocation(declaration.src));
         case "ModifierDefinition":
             return \modifier(declaration.name, parseDeclaration(declaration.parameters), parseStatement(declaration.body), src=parseLocation(declaration.src));
+        case "UsingForDirective":
+            return \using(parseType(declaration.libraryName), parseType(declaration.typeName), src=parseLocation(declaration.src));
+        case "EnumDefinition":
+            return \enum(declaration.name, parseExpressions(declaration.members), src=parseLocation(declaration.src));
         default: throw "Unknown declaration type: <declaration.nodeType>";
     }
 }
@@ -170,7 +197,11 @@ Expression parseExpression(node expression){
         case "TupleExpression":
             return \tuple(parseExpressions(expression.components), src=parseLocation(expression.src));
         case "ElementaryTypeNameExpression":
-            return \ElementaryTypeNameExpression(parseType(expression.typeName));
+            return \ElementaryTypeNameExpression(parseType(expression.typeName), src=parseLocation(expression.src));
+        case "Conditional":
+            return \conditional(parseExpression(expression.trueExpression), parseExpression(expression.falseExpression), src=parseLocation(expression.src));
+        case "EnumValue":
+            return \enumValue(expression.name, src=parseLocation(expression.src));
         default: throw "Unknown expression type: <expression.nodeType>";
     }
 }
@@ -185,6 +216,8 @@ Statement parseStatement(node statement){
     switch(statement.nodeType) {
         case "Block":
             return \block(parseStatements(statement.statements), src=parseLocation(statement.src));
+        case "UncheckedBlock":
+            return \uncheckedBlock(parseStatements(statement.statements), src=parseLocation(statement.src));
         case "ExpressionStatement":
             return \expressionStatement(parseExpression(statement.expression), src=parseLocation(statement.src));
         case "VariableDeclarationStatement": 
@@ -210,13 +243,20 @@ Statement parseStatement(node statement){
         case "WhileStatement":
             return \while(parseExpression(statement.condition), parseStatement(statement.body), src=parseLocation(statement.src));
         case "Return":
-            return \return(parseExpression(statement.expression), src=parseLocation(statement.src));
+        {
+            map[str,value] children = getKeywordParameters(statement);
+            if("expression" in children) {
+                return \return(parseExpression(statement.expression), src=parseLocation(statement.src));
+            } else {
+                return \return(src=parseLocation(statement.src));
+            }
+        }
         case "PlaceholderStatement":
             return \return(src=parseLocation(statement.src));
         case "EmitStatement":
             return \emit(parseExpression(statement.eventCall), src=parseLocation(statement.src));
         case "InlineAssembly":
-            return \assembly();
+            return \assembly(src=parseLocation(statement.src));
         default: throw "Unknown statement type: <statement.nodeType>";
     }
 }
@@ -227,13 +267,15 @@ Type parseType(node \type){
         case "ElementaryTypeName":
         {
             switch(\type.name) {
+                case /int[0-9]*/:
+                    return \int();
                 case /uint[0-9]*/:
                     return \uint();
                 case "address":
                     return \address();
                 case "bool":
                     return \boolean();
-                case "bytes32":
+                case /bytes[0-9]*/:
                     return \bytes();
                 case "string":
                     return \string();
@@ -271,6 +313,14 @@ int visitStatements(Declaration declaration){
             for(Declaration declaration <- contractBody) {
                 count += visitStatements(declaration);
             }
+        case \interface(_,list[Declaration] interfaceBody):
+            for(Declaration declaration <- interfaceBody) {
+                count += visitStatements(declaration);
+            }
+        case \library(_,list[Declaration] libraryBody):
+            for(Declaration declaration <- libraryBody) {
+                count += visitStatements(declaration);
+            }
         case \constructor(_,Statement constructorBody):
             count+= countDecisionPoints(constructorBody);
         case \modifier(_,_,Statement modifierBody):
@@ -293,6 +343,10 @@ int countDecisionPoints(Statement statement) {
             for(Statement statement <- statements) {
                 count += countDecisionPoints(statement);
             }
+        case \uncheckedBlock(list[Statement] statements):
+            for(Statement statement <- statements) {
+                count += countDecisionPoints(statement);
+            }
         case \while(_,Statement body):{
             count+=1;
             count+=countDecisionPoints(body);
@@ -310,10 +364,10 @@ list[Declaration] createAST(loc file) {
     // Set location of file
     sourceLocation = file;
 
-    // Read the contents of the json AST
+    // Read the contents of the JSON AST
     str jsonAST = readFile(file);
 
-    // Parse json string
+    // Parse JSON string
     map[str,value] parsedJsonAST = parseJSON(#map[str,value], jsonAST);
 
     // Extract nodes
