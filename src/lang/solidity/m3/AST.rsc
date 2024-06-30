@@ -295,40 +295,37 @@ Type parseType(node \type){
 }
 
 // Calculate cyclomatic complexity = decision points + 1
-int calculateComplexity(list[Declaration] ast) {
-    int complexity = 1;
+list[tuple[loc,int]] calculateComplexity(list[Declaration] ast) {
+    list[tuple[loc,int]] complexities = [];
     for (Declaration declaration <- ast) {
-        complexity += visitStatements(declaration);
+        complexities += visitDeclarations(declaration);
     }
-    return complexity;
+    return complexities;
 }
 
 // Visit all the statements to find decision points
-int visitStatements(Declaration declaration){
-    int count=0;
+list[tuple[loc,int]] visitDeclarations(Declaration declaration){
+    list[tuple[loc,int]] complexities = [];
     switch(declaration) {
-        case \function(_,_,_,Statement functionBody): 
-            count += countDecisionPoints(functionBody);
+        case \function(_,_,_,Statement functionBody, src=location):
+        {
+            list[tuple[loc,int]] complexity = [<location,countDecisionPoints(functionBody)+1>];
+            complexities += complexity;
+        } 
         case \contract(_,list[Declaration] contractBody):
             for(Declaration declaration <- contractBody) {
-                count += visitStatements(declaration);
+                complexities += visitDeclarations(declaration);
             }
         case \interface(_,list[Declaration] interfaceBody):
             for(Declaration declaration <- interfaceBody) {
-                count += visitStatements(declaration);
+                complexities += visitDeclarations(declaration);
             }
         case \library(_,list[Declaration] libraryBody):
             for(Declaration declaration <- libraryBody) {
-                count += visitStatements(declaration);
+                complexities += visitDeclarations(declaration);
             }
-        case \constructor(_,Statement constructorBody):
-            count+= countDecisionPoints(constructorBody);
-        case \modifier(_,_,Statement modifierBody):
-            count += countDecisionPoints(modifierBody);
-        case \receive(Statement receiveBody):
-            count += countDecisionPoints(receiveBody);
     }
-    return count;
+    return complexities;
 }
 
 // Count the decision points
