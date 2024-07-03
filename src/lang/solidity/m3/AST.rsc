@@ -3,6 +3,7 @@ module lang::solidity::m3::AST
 extend analysis::m3::AST;
 
 import lang::json::IO;
+import util::FileSystem;
 import IO;
 import List;
 import Node;
@@ -294,68 +295,6 @@ Type parseType(node \type){
     }
 }
 
-// Calculate cyclomatic complexity = decision points + 1
-list[tuple[loc,int]] calculateComplexity(list[Declaration] ast) {
-    list[tuple[loc,int]] complexities = [];
-    for (Declaration declaration <- ast) {
-        complexities += visitDeclarations(declaration);
-    }
-    return complexities;
-}
-
-// Visit all the statements to find decision points
-list[tuple[loc,int]] visitDeclarations(Declaration declaration){
-    list[tuple[loc,int]] complexities = [];
-    switch(declaration) {
-        case \function(_,_,_,Statement functionBody, src=location):
-        {
-            list[tuple[loc,int]] complexity = [<location,countDecisionPoints(functionBody)+1>];
-            complexities += complexity;
-        } 
-        case \contract(_,list[Declaration] contractBody):
-            for(Declaration declaration <- contractBody) {
-                complexities += visitDeclarations(declaration);
-            }
-        case \interface(_,list[Declaration] interfaceBody):
-            for(Declaration declaration <- interfaceBody) {
-                complexities += visitDeclarations(declaration);
-            }
-        case \library(_,list[Declaration] libraryBody):
-            for(Declaration declaration <- libraryBody) {
-                complexities += visitDeclarations(declaration);
-            }
-    }
-    return complexities;
-}
-
-// Count the decision points
-int countDecisionPoints(Statement statement) {
-    int count=0;
-    switch(statement) {
-        case \if(_,_):
-            count += 1;
-        case \if(_,_,_):
-            count += 1;
-        case \block(list[Statement] statements):
-            for(Statement statement <- statements) {
-                count += countDecisionPoints(statement);
-            }
-        case \uncheckedBlock(list[Statement] statements):
-            for(Statement statement <- statements) {
-                count += countDecisionPoints(statement);
-            }
-        case \while(_,Statement body):{
-            count+=1;
-            count+=countDecisionPoints(body);
-        }
-        case \for(_,_,_,Statement body):{
-            count+=1;
-            count+=countDecisionPoints(body);
-        }
-    }
-    return count;
-}
-
 list[Declaration] createAST(loc file) {
 
     // Set location of file
@@ -374,4 +313,38 @@ list[Declaration] createAST(loc file) {
     list[Declaration] ast = parseDeclarations(nodes);
 
     return ast;
+}
+
+// Convert JSON ASTs to rascal data structures
+list[list[Declaration]] createRascalASTs(loc directory){
+
+    // Find all JSON files in directory
+    set[loc] jsonFiles = find(directory, "json");
+    list[loc] jsonASTs = [];
+
+    // Find all ASTs
+    for(loc file <- jsonFiles) {
+        str path = file.path;
+        if (endsWith(path, "AST.json")) {
+            jsonASTs += file;
+        }
+    }
+    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/protocol/configuration/PriceOracleSentinelAST.json|;
+    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/dependencies/openzeppelin/upgradeability/BaseAdminUpgradeabilityProxyAST.json|;
+    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/protocol/tokenization/StableDebtTokenAST.json|;
+    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/dependencies/openzeppelin/contracts/AddressAST.json|;
+    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/dependencies/openzeppelin/upgradeability/UpgradeabilityProxyAST.json|;
+    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/misc/AaveProtocolDataProviderAST.json|;
+    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/dependencies/openzeppelin/upgradeability/InitializableUpgradeabilityProxyAST.json|;
+    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/protocol/libraries/logic/IsolationModeLogicAST.json|;
+    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/protocol/libraries/aave-upgradeability/BaseImmutableAdminUpgradeabilityProxyAST.json|;
+
+    // Create list of rascal ASTs
+    list[list[Declaration]] rascalASTs = [];
+    for(jsonAST <- jsonASTs) {
+        println("Currently parsing: <jsonAST>");
+        rascalASTs += [createAST(jsonAST)];
+    }
+
+    return rascalASTs;
 }
