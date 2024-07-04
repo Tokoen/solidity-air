@@ -2,6 +2,26 @@ module lang::solidity::m3::Containment
 
 import lang::solidity::m3::AST;
 import String;
+import List;
+import IO;
+/*
+|file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/protocol/libraries/aave-upgradeability/InitializableImmutableAdminUpgradeabilityProxy.sol|
+../../../dependencies/openzeppelin/upgradeability/InitializableUpgradeabilityProxy.sol
+../../../dependencies/openzeppelin/upgradeability/Proxy.sol
+./BaseImmutableAdminUpgradeabilityProxy.sol
+getImportLocation(|file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/protocol/libraries/aave-upgradeability/InitializableImmutableAdminUpgradeabilityProxy.sol|,"../../../dependencies/openzeppelin/upgradeability/InitializableUpgradeabilityProxy.sol");
+*/
+
+loc getImportLocation(loc parent, str path){
+    int backTrack = size(findAll(path, "./"))+2;
+    str importLocation = parent.path;
+    for(int i <- [1 .. backTrack]){
+        int slash = findLast(importLocation, "/");
+        importLocation = substring(importLocation, 0, slash);
+    }
+    importLocation = importLocation + "/" + replaceAll(replaceAll(path, "../", ""), "./" , "");
+    return |file:///| + importLocation;
+}
 
 rel[loc, loc] addContainment(loc parent, list[loc] children) {
     rel[loc, loc] containment = {};
@@ -16,25 +36,28 @@ rel[loc, loc] traverseAST(value \node, loc parent) {
     switch(\node) {
         // Declaration containment
         case \pragma(_):
-            containment += addContainment(parent, [|file:///| + parent.path]);
-        case \import(_):
-            containment += addContainment(parent, [|file:///| + parent.path]);
+            containment += addContainment(|file:///| + parent.path, [parent]);
+        case \import(path):{
+            loc importLocation = getImportLocation(parent, path);
+            containment += addContainment(|file:///| + parent.path, [importLocation]);
+            containment += addContainment(|file:///| + parent.path, [parent]);
+        }
         case \contract(_, contractBody):{
-            containment += addContainment(parent, [|file:///| + parent.path]);
+            containment += addContainment(|file:///| + parent.path, [parent]);
             containment += addContainment(parent, [declaration.src | declaration <- contractBody]);
             for(declaration <- contractBody) {
                 containment += traverseAST(declaration, declaration.src);
             }
         }
         case \interface(_, interfaceBody):{
-            containment += addContainment(parent, [|file:///| + parent.path]);
+            containment += addContainment(|file:///| + parent.path, [parent]);
             containment += addContainment(parent, [declaration.src | declaration <- interfaceBody]);
             for(declaration <- interfaceBody) {
                 containment += traverseAST(declaration, declaration.src);
             }
         }
         case \library(_, libraryBody):{
-            containment += addContainment(parent, [|file:///| + parent.path]);
+            containment += addContainment(|file:///| + parent.path, [parent]);
             containment += addContainment(parent, [declaration.src | declaration <- libraryBody]);
             for(declaration <- libraryBody) {
                 containment += traverseAST(declaration, declaration.src);
@@ -73,7 +96,7 @@ rel[loc, loc] traverseAST(value \node, loc parent) {
             }
         }
         case \struct(_, members):{
-            containment += addContainment(parent, [|file:///| + parent.path]);
+            containment += addContainment(|file:///| + parent.path, [parent]);
             containment += addContainment(parent, [declaration.src | declaration <- members]);
             for(declaration <- members) {
                 containment += traverseAST(declaration, declaration.src);
@@ -85,7 +108,7 @@ rel[loc, loc] traverseAST(value \node, loc parent) {
             containment += traverseAST(modifierBody, modifierBody.src);
         }
         case \enum(_, enumMembers):{
-            containment += addContainment(parent, [|file:///| + parent.path]);
+            containment += addContainment(|file:///| + parent.path, [parent]);
             containment += addContainment(parent, [expression.src | expression <- enumMembers]);
             for(expression <- enumMembers) {
                 containment += traverseAST(expression, expression.src);
@@ -244,6 +267,11 @@ rel[loc,loc] buildContainment(list[list[Declaration]] rascalASTs) {
     for(ast <- rascalASTs) {
         containment += fileContainment(ast[0]);
         containment += codeContainment(ast);
+    }
+    for(relation <- containment) {
+        if(relation[0]==relation[1]) {
+            containment -= relation;
+        }
     }
     return containment;
 }
