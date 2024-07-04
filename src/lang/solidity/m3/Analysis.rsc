@@ -32,5 +32,6 @@ void cyclicDependency(loc directory) {
     set[loc] nodes = domain(containment) + range(containment);
 
     set[set[loc]] cycles = detectCycles(containment, nodes);
+    println("Cycles:");
     iprintln(cycles);
 }
