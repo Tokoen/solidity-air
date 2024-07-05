@@ -31,6 +31,7 @@ data Declaration
     | \receive(Statement receiveBody)
     | \using(Type library, Type \type)
     | \enum(str name, list[Expression] enumMembers)
+    | \error(str name, Declaration parameters)
     ;
 
 data Expression 
@@ -158,6 +159,8 @@ Declaration parseDeclaration(node declaration) {
             return \using(parseType(declaration.libraryName), parseType(declaration.typeName), src=parseLocation(declaration.src));
         case "EnumDefinition":
             return \enum(declaration.name, parseExpressions(declaration.members), src=parseLocation(declaration.src));
+        case "ErrorDefinition":
+            return \error(declaration.name, parseDeclaration(declaration.parameters), src=parseLocation(declaration.src));
         default: throw "Unknown declaration type: <declaration.nodeType>";
     }
 }
@@ -256,6 +259,8 @@ Statement parseStatement(node statement){
             return \return(src=parseLocation(statement.src));
         case "EmitStatement":
             return \emit(parseExpression(statement.eventCall), src=parseLocation(statement.src));
+        case "RevertStatement":
+            return \revert(parseExpression(statement.errorCall), src=parseLocation(statement.src));
         case "InlineAssembly":
             return \assembly(src=parseLocation(statement.src));
         default: throw "Unknown statement type: <statement.nodeType>";
@@ -329,21 +334,13 @@ list[list[Declaration]] createRascalASTs(loc directory){
             jsonASTs += file;
         }
     }
-    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/protocol/configuration/PriceOracleSentinelAST.json|;
-    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/dependencies/openzeppelin/upgradeability/BaseAdminUpgradeabilityProxyAST.json|;
-    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/protocol/tokenization/StableDebtTokenAST.json|;
-    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/dependencies/openzeppelin/contracts/AddressAST.json|;
-    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/dependencies/openzeppelin/upgradeability/UpgradeabilityProxyAST.json|;
-    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/misc/AaveProtocolDataProviderAST.json|;
-    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/dependencies/openzeppelin/upgradeability/InitializableUpgradeabilityProxyAST.json|;
-    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/protocol/libraries/logic/IsolationModeLogicAST.json|;
-    jsonASTs -= |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/protocol/libraries/aave-upgradeability/BaseImmutableAdminUpgradeabilityProxyAST.json|;
-
+    
     // Create list of rascal ASTs
     list[list[Declaration]] rascalASTs = [];
     for(jsonAST <- jsonASTs) {
         println("Currently parsing: <jsonAST>");
-        rascalASTs += [createAST(jsonAST)];
+        try rascalAST = rascalASTs += [createAST(jsonAST)];  
+        catch: println("IO NPE, skipping <jsonAST>");
     }
 
     return rascalASTs;

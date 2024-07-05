@@ -9,15 +9,18 @@ import IO;
 import List;
 import Map;
 import Relation;
+import Set;
 
 // |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core|
+// |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/openzeppelin-contracts|
 
 void complexity(loc directory) { // Insert path and change backward slash \ to forward slash /: |file:///<path>|;
     list[list[Declaration]] rascalASTs = createRascalASTs(directory);
     list[tuple[loc,int]] complexities = createComplexities(rascalASTs);
     println("Amount of functions:<size(complexities)>");
-
-    list[int] solComplexity = [0| i <- range(toMap(complexities))];
+    
+    int range = max([x |<_,x> <- complexities]);
+    list[int] solComplexity = [0| i <- [0 .. range]];
     for(<_,complexity> <- complexities) {
         solComplexity[complexity-1]+=1;
     }
