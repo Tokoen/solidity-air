@@ -7,12 +7,13 @@ import lang::solidity::m3::CyclicDependency;
 import util::FileSystem;
 import IO;
 import List;
-import Map;
 import Relation;
 import Set;
 
 // |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core|
 // |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/openzeppelin-contracts|
+// |file:///C:/Users/tobia/OneDrive/Bureaublad/Github/solbase|
+// cloc.pl
 
 void complexity(loc directory) { // Insert path and change backward slash \ to forward slash /: |file:///<path>|;
     list[list[Declaration]] rascalASTs = createRascalASTs(directory);
@@ -30,11 +31,21 @@ void complexity(loc directory) { // Insert path and change backward slash \ to f
 void cyclicDependency(loc directory) {
     M3 model = createM3(directory);
     rel[loc,loc] containment = model.containment;
-    //To prove it works:
-    containment += <|file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/protocol/libraries/aave-upgradeability/InitializableImmutableAdminUpgradeabilityProxy.sol|(939,155),|file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/protocol/libraries/aave-upgradeability/InitializableImmutableAdminUpgradeabilityProxy.sol|>;
-    set[loc] nodes = domain(containment) + range(containment);
+    set[loc] containmentNodes = domain(containment) + range(containment);
 
-    set[set[loc]] cycles = detectCycles(containment, nodes);
-    println("Cycles:");
-    iprintln(cycles);
+    set[set[loc]] containmentCycles = detectCycles(containment, containmentNodes);
+    println("Cyclic dependency:");
+    iprintln(containmentCycles);
+
+    rel[loc,loc] uses = model.uses;
+    set[loc] usesNodes = domain(uses) + range(uses);
+
+    set[set[loc]] importCycles = detectCycles(uses, usesNodes);
+    println("Import cycles:");
+    iprintln(importCycles);
+}
+
+void analyze(loc directory){
+    complexity(directory);
+    cyclicDependency(directory);
 }

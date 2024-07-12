@@ -2,26 +2,6 @@ module lang::solidity::m3::Containment
 
 import lang::solidity::m3::AST;
 import String;
-import List;
-import IO;
-/*
-|file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/protocol/libraries/aave-upgradeability/InitializableImmutableAdminUpgradeabilityProxy.sol|
-../../../dependencies/openzeppelin/upgradeability/InitializableUpgradeabilityProxy.sol
-../../../dependencies/openzeppelin/upgradeability/Proxy.sol
-./BaseImmutableAdminUpgradeabilityProxy.sol
-getImportLocation(|file:///C:/Users/tobia/OneDrive/Bureaublad/Github/aave-v3-core/contracts/protocol/libraries/aave-upgradeability/InitializableImmutableAdminUpgradeabilityProxy.sol|,"../../../dependencies/openzeppelin/upgradeability/InitializableUpgradeabilityProxy.sol");
-*/
-
-loc getImportLocation(loc parent, str path){
-    int backTrack = size(findAll(path, "./"))+2;
-    str importLocation = parent.path;
-    for(int i <- [1 .. backTrack]){
-        int slash = findLast(importLocation, "/");
-        importLocation = substring(importLocation, 0, slash);
-    }
-    importLocation = importLocation + "/" + replaceAll(replaceAll(path, "../", ""), "./" , "");
-    return |file:///| + importLocation;
-}
 
 rel[loc, loc] addContainment(loc parent, list[loc] children) {
     rel[loc, loc] containment = {};
@@ -38,8 +18,6 @@ rel[loc, loc] traverseAST(value \node, loc parent) {
         case \pragma(_):
             containment += addContainment(|file:///| + parent.path, [parent]);
         case \import(path):{
-            loc importLocation = getImportLocation(parent, path);
-            containment += addContainment(|file:///| + parent.path, [importLocation]);
             containment += addContainment(|file:///| + parent.path, [parent]);
         }
         case \contract(_, contractBody):{

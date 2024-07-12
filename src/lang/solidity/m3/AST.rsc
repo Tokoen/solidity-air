@@ -121,7 +121,7 @@ Declaration parseDeclaration(node declaration) {
                     return \interface(declaration.name, parseDeclarations(declaration.nodes), src=parseLocation(declaration.src));
                 case "library":
                     return \library(declaration.name, parseDeclarations(declaration.nodes), src=parseLocation(declaration.src));
-                default: throw "Unknown contract declaration: <declaration.contractKind>";
+                default: throw "Unknown contract declaration: <declaration.contractKind> in <sourceLocation>";
             }
         }
         case "VariableDeclaration":
@@ -144,7 +144,7 @@ Declaration parseDeclaration(node declaration) {
                     return \receive(parseStatement(declaration.body), src=parseLocation(declaration.src));
                 case "fallback":
                     return \fallback(declaration.name, parseDeclaration(declaration.parameters), parseDeclaration(declaration.returnParameters), parseStatement(declaration.body), src=parseLocation(declaration.src));
-                default: throw "Unknown function declaration: <declaration.kind>";
+                default: throw "Unknown function declaration: <declaration.kind> in <sourceLocation>";
             }
         }
         case "EventDefinition":
@@ -161,7 +161,7 @@ Declaration parseDeclaration(node declaration) {
             return \enum(declaration.name, parseExpressions(declaration.members), src=parseLocation(declaration.src));
         case "ErrorDefinition":
             return \error(declaration.name, parseDeclaration(declaration.parameters), src=parseLocation(declaration.src));
-        default: throw "Unknown declaration type: <declaration.nodeType>";
+        default: throw "Unknown declaration type: <declaration.nodeType> in <sourceLocation>";
     }
 }
 
@@ -191,7 +191,7 @@ Expression parseExpression(node expression){
                     return \numberLiteral(expression.\value, src=parseLocation(expression.src));
                 case "bool":
                     return \booleanLiteral(expression.\value, src=parseLocation(expression.src));
-                default: throw "Unknown literal: <expression.kind>";
+                default: throw "Unknown literal: <expression.kind> in <sourceLocation>";
             }     
         }
         case "MemberAccess":
@@ -206,7 +206,7 @@ Expression parseExpression(node expression){
             return \conditional(parseExpression(expression.trueExpression), parseExpression(expression.falseExpression), src=parseLocation(expression.src));
         case "EnumValue":
             return \enumValue(expression.name, src=parseLocation(expression.src));
-        default: throw "Unknown expression type: <expression.nodeType>";
+        default: throw "Unknown expression type: <expression.nodeType> in <sourceLocation>";
     }
 }
 
@@ -263,7 +263,7 @@ Statement parseStatement(node statement){
             return \revert(parseExpression(statement.errorCall), src=parseLocation(statement.src));
         case "InlineAssembly":
             return \assembly(src=parseLocation(statement.src));
-        default: throw "Unknown statement type: <statement.nodeType>";
+        default: throw "Unknown statement type: <statement.nodeType> in <sourceLocation>";
     }
 }
 
@@ -285,7 +285,7 @@ Type parseType(node \type){
                     return \bytes();
                 case "string":
                     return \string();
-                default: throw "Unknown ElementaryTypeName: <\type.name>";
+                default: throw "Unknown ElementaryTypeName: <\type.name> in <sourceLocation>";
             }
         }
         case "Mapping":
@@ -296,7 +296,7 @@ Type parseType(node \type){
             return \identifierPath(\type.name);
         case "ArrayTypeName":
             return \array(parseType(\type.baseType));
-        default: throw "Unknown type: <\type.nodeType>";
+        default: throw "Unknown type: <\type.nodeType> in <sourceLocation>";
     }
 }
 
@@ -338,9 +338,8 @@ list[list[Declaration]] createRascalASTs(loc directory){
     // Create list of rascal ASTs
     list[list[Declaration]] rascalASTs = [];
     for(jsonAST <- jsonASTs) {
-        println("Currently parsing: <jsonAST>");
         try rascalAST = rascalASTs += [createAST(jsonAST)];  
-        catch: println("IO NPE, skipping <jsonAST>");
+        catch:;
     }
 
     return rascalASTs;
