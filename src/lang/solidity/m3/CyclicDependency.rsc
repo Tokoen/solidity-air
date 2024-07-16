@@ -2,6 +2,8 @@ module lang::solidity::m3::CyclicDependency
 
 import List;
 
+// Goes through the nodes with depth first search keeping track of which are visited,
+// if a cycle is found it gets added to the set
 set[set[loc]] detectCycles(rel[loc, loc] graph, set[loc] nodes) {
     list[loc] visited = [];
     list[loc] stack = [];
@@ -16,6 +18,7 @@ set[set[loc]] detectCycles(rel[loc, loc] graph, set[loc] nodes) {
     return cycles;
 }
 
+// Depth first search
 set[set[loc]] dfs(loc \node, rel[loc, loc] graph, list[loc] visited, list[loc] stack) {
     set[set[loc]] cycles = {};
     visited += \node;

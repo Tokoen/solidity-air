@@ -4,6 +4,7 @@ import lang::solidity::m3::AST;
 import String;
 import List;
 
+// Gets the import source location from an import declaration
 loc getImportLocation(loc parent, str path){
     int backTrack = size(findAll(path, "./"))+1;
     str importLocation = parent.path;
@@ -15,6 +16,7 @@ loc getImportLocation(loc parent, str path){
     return |file:///| + importLocation;
 }
 
+// Adds import to the set
 rel[loc, loc] addImport(value \node, loc parent) {
     rel[loc, loc] uses = {};
     switch(\node) {
@@ -26,7 +28,7 @@ rel[loc, loc] addImport(value \node, loc parent) {
     return uses;
 }
 
-// Returns all relations in a directory 
+// Returns all import relations in a directory 
 rel[loc,loc] importUses(list[list[Declaration]] rascalASTs) {
     rel[loc, loc] uses = {};
     for(ast <- rascalASTs) {

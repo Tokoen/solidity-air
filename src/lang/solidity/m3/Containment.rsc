@@ -3,6 +3,7 @@ module lang::solidity::m3::Containment
 import lang::solidity::m3::AST;
 import String;
 
+// Add relation to containment list
 rel[loc, loc] addContainment(loc parent, list[loc] children) {
     rel[loc, loc] containment = {};
     for (child <- children) {
@@ -11,13 +12,14 @@ rel[loc, loc] addContainment(loc parent, list[loc] children) {
     return containment;
 }
 
+// Recursively traverse through the AST
 rel[loc, loc] traverseAST(value \node, loc parent) {
     rel[loc, loc] containment = {};
     switch(\node) {
         // Declaration containment
         case \pragma(_):
             containment += addContainment(|file:///| + parent.path, [parent]);
-        case \import(path):{
+        case \import(_):{
             containment += addContainment(|file:///| + parent.path, [parent]);
         }
         case \contract(_, contractBody):{
@@ -230,6 +232,7 @@ rel[loc,loc] fileContainment(Declaration declaration) {
         loc1 = substring(loc2, 0, slash);
         slash = findLast(loc1, "/");
         folder = substring(loc1, slash, size(loc1));
+        // Change "/Github" to the location of which the analysis directory is in
         if(folder == "/Github") {
             break;
         }

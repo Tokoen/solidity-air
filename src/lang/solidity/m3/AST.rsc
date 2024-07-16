@@ -165,6 +165,7 @@ Declaration parseDeclaration(node declaration) {
     }
 }
 
+// Parse list of expressions
 list[Expression] parseExpressions(list[node] expressions){
     return [parseExpression(expression) | expression <- expressions];
 }
