@@ -2,6 +2,7 @@ module lang::solidity::m3::Containment
 
 import lang::solidity::m3::AST;
 import String;
+import List;
 
 // Add relation to containment list
 rel[loc, loc] addContainment(loc parent, list[loc] children) {
@@ -246,7 +247,9 @@ rel[loc,loc] fileContainment(Declaration declaration) {
 rel[loc,loc] buildContainment(list[list[Declaration]] rascalASTs) {
     rel[loc, loc] containment = {};
     for(ast <- rascalASTs) {
-        containment += fileContainment(ast[0]);
+        if(!isEmpty(ast)) {
+            containment += fileContainment(ast[0]);
+        }
         containment += codeContainment(ast);
     }
     for(relation <- containment) {
