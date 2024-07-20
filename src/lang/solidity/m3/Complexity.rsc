@@ -2,40 +2,6 @@ module lang::solidity::m3::Complexity
 
 import lang::solidity::m3::AST;
 
-// Calculate cyclomatic complexity = decision points + 1
-list[tuple[loc,int]] calculateComplexity(list[Declaration] ast) {
-    list[tuple[loc,int]] complexities = [];
-    for (Declaration declaration <- ast) {
-        complexities += visitDeclarations(declaration);
-    }
-    return complexities;
-}
-
-// Visit all the statements to find decision points
-list[tuple[loc,int]] visitDeclarations(Declaration declaration){
-    list[tuple[loc,int]] complexities = [];
-    switch(declaration) {
-        case \function(_,_,_,Statement functionBody, src=location):
-        {
-            list[tuple[loc,int]] complexity = [<location,countDecisionPoints(functionBody)+1>];
-            complexities += complexity;
-        } 
-        case \contract(_,list[Declaration] contractBody):
-            for(Declaration declaration <- contractBody) {
-                complexities += visitDeclarations(declaration);
-            }
-        case \interface(_,list[Declaration] interfaceBody):
-            for(Declaration declaration <- interfaceBody) {
-                complexities += visitDeclarations(declaration);
-            }
-        case \library(_,list[Declaration] libraryBody):
-            for(Declaration declaration <- libraryBody) {
-                complexities += visitDeclarations(declaration);
-            }
-    }
-    return complexities;
-}
-
 // Count the decision points
 int countDecisionPoints(Statement statement) {
     int count=0;
@@ -64,11 +30,38 @@ int countDecisionPoints(Statement statement) {
     return count;
 }
 
-// Create map of all function locations in a directory paired with its complexity
+// Visit all the statements to find decision points
+list[tuple[loc,int]] visitDeclarations(Declaration declaration){
+    list[tuple[loc,int]] complexities = [];
+    switch(declaration) {
+        case \function(_,_,_,Statement functionBody, src=location):
+        {
+            list[tuple[loc,int]] complexity = [<location,countDecisionPoints(functionBody)+1>];
+            complexities += complexity;
+        } 
+        case \contract(_,list[Declaration] contractBody):
+            for(Declaration declaration <- contractBody) {
+                complexities += visitDeclarations(declaration);
+            }
+        case \interface(_,list[Declaration] interfaceBody):
+            for(Declaration declaration <- interfaceBody) {
+                complexities += visitDeclarations(declaration);
+            }
+        case \library(_,list[Declaration] libraryBody):
+            for(Declaration declaration <- libraryBody) {
+                complexities += visitDeclarations(declaration);
+            }
+    }
+    return complexities;
+}
+
+// Create list of all function locations in a directory paired with its complexity
 list[tuple[loc,int]] createComplexities(list[list[Declaration]] rascalASTs) {
     list[tuple[loc,int]] complexities = [];
     for(ast <- rascalASTs) {
-       complexities += calculateComplexity(ast); 
+       for (Declaration declaration <- ast) {
+        complexities += visitDeclarations(declaration);
+        }
     }
     return complexities;
 }

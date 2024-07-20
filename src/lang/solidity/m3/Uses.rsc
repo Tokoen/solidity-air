@@ -3,12 +3,13 @@ module lang::solidity::m3::Uses
 import lang::solidity::m3::AST;
 import String;
 import List;
+import IO;
 
 // Gets the import source location from an import declaration
 loc getImportLocation(loc parent, str path){
-    int backTrack = size(findAll(path, "./"))+1;
+    int backTrack = size(findAll(path, "../")+1);
     str importLocation = parent.path;
-    for(int i <- [1 .. backTrack]){
+    for(int i <- [0 .. backTrack]){
         int slash = findLast(importLocation, "/");
         importLocation = substring(importLocation, 0, slash);
     }
@@ -38,3 +39,6 @@ rel[loc,loc] importUses(list[list[Declaration]] rascalASTs) {
     }
     return uses;
 }
+
+//|file:///C:/Users/tobia/OneDrive/Bureaublad/Github/solbase/src/utils/Base64.sol|
+// '../auth/Auth.sol'

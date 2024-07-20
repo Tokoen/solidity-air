@@ -11,7 +11,7 @@ import Relation;
 import Set;
 
 // Calculates the complexities of the functions in Solidity programs
-void complexity(loc directory) { // Insert path and change backward slash \ to forward slash /: |file:///<path>|;
+void complexity(loc directory) { 
     list[list[Declaration]] rascalASTs = createRascalASTs(directory);
 
     // Create list of tuples with location of function and its cyclomatic complexity

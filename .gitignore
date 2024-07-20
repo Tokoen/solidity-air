@@ -1,0 +1,10 @@
+# Dependencies
+node_modules
+package-lock.json
+package.json
+
+# VSCode settings
+.vscode
+
+# Maven
+target

@@ -95,3 +95,7 @@ solFiles.forEach(filePath => {
         console.log('Full output:', JSON.stringify(output, null, 2));
     }
 });
+
+// Print the root directory path in rascal format
+const formattedRootDirectoryPath = `|file:///${rootDirectoryPath.replace(/\\/g, '/')}|`;
+console.log(formattedRootDirectoryPath);
