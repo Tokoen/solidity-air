@@ -47,9 +47,6 @@ function findImports(importPath) {
     }
 }
 
-// Start timing the script execution
-console.time('Execution Time');
-
 // Get all .sol files in the directory (including nested directories)
 const solFiles = getSolFiles(rootDirectoryPath);
 
@@ -98,9 +95,6 @@ solFiles.forEach(filePath => {
         console.log('Full output:', JSON.stringify(output, null, 2));
     }
 });
-
-// Stop timing and print the execution time
-console.timeEnd('Execution Time');
 
 // Print the root directory path in rascal format
 const formattedRootDirectoryPath = `|file:///${rootDirectoryPath.replace(/\\/g, '/')}|`;
