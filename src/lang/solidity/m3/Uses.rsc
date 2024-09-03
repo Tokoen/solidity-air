@@ -3,7 +3,6 @@ module lang::solidity::m3::Uses
 import lang::solidity::m3::AST;
 import String;
 import List;
-import IO;
 
 // Gets the import source location from an import declaration
 loc getImportLocation(loc parent, str path){
@@ -39,6 +38,3 @@ rel[loc,loc] importUses(list[list[Declaration]] rascalASTs) {
     }
     return uses;
 }
-
-//|file:///C:/Users/tobia/OneDrive/Bureaublad/Github/solbase/src/utils/Base64.sol|
-// '../auth/Auth.sol'

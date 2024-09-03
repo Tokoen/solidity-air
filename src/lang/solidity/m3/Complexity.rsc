@@ -59,8 +59,8 @@ list[tuple[loc,int]] visitDeclarations(Declaration declaration){
 list[tuple[loc,int]] createComplexities(list[list[Declaration]] rascalASTs) {
     list[tuple[loc,int]] complexities = [];
     for(ast <- rascalASTs) {
-       for (Declaration declaration <- ast) {
-        complexities += visitDeclarations(declaration);
+       for (declaration <- ast) {
+            complexities += visitDeclarations(declaration);
         }
     }
     return complexities;
